@@ -1,0 +1,25 @@
+# Local env files
+.env
+FrontEnd/.env
+Backend/.env
+
+# Node modules
+FrontEnd/node_modules/
+
+# Python virtual environments
+venv/
+Backend/venv/
+Backend/venv_local/
+
+# Python cache
+Backend/__pycache__/
+Backend/.cache/
+Backend/*.pyc
+Backend/*.pyo
+
+# Secrets
+Backend/firebase-service-account.json
+
+# OS files
+.DS_Store
+.vscode/
