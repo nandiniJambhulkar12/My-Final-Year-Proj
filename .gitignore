@@ -12,10 +12,10 @@ Backend/venv/
 Backend/venv_local/
 
 # Python cache
-Backend/__pycache__/
+**/__pycache__/
+**/*.py[cod]
+**/*.pyo
 Backend/.cache/
-Backend/*.pyc
-Backend/*.pyo
 
 # Secrets
 Backend/firebase-service-account.json
