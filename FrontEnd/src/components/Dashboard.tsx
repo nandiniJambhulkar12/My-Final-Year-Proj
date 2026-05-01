@@ -251,7 +251,7 @@ const Dashboard: React.FC = () => {
     let isMounted = true;
 
     const loadDashboardData = async () => {
-      if (!userEmail || !userUid) {
+      if (!userEmail || !userUid || !user) {
         if (isMounted) {
           setStats(emptyStats);
           setRecentAnalyses([]);
@@ -266,10 +266,7 @@ const Dashboard: React.FC = () => {
 
         const apiBase =
           process.env.REACT_APP_API_URL || "http://localhost:8000";
-        await getOrRefreshBackendToken(apiBase, {
-          email: userEmail,
-          uid: userUid,
-        });
+        await getOrRefreshBackendToken(apiBase, user);
         const response = await apiFetch("/api/history/", { method: "GET" });
         const history = Array.isArray(response)
           ? response
@@ -308,7 +305,7 @@ const Dashboard: React.FC = () => {
         abortControllerRef.current.abort();
       }
     };
-  }, [userEmail, userUid]);
+  }, [user, userEmail, userUid]);
 
   const handleAnalyzeSubmit = async ({
     code,
@@ -419,7 +416,13 @@ const Dashboard: React.FC = () => {
     } catch (error) {
       // Only show error if not aborted
       if (error instanceof Error && error.name !== "AbortError") {
-        const errorMessage = error.message;
+        let errorMessage = error.message;
+
+        // Better error messaging for fetch failures
+        if (errorMessage === "Failed to fetch") {
+          errorMessage = `Cannot reach backend at ${process.env.REACT_APP_API_URL || "http://localhost:8000"}. Please ensure the backend is running.`;
+        }
+
         alert("Failed to analyze code: " + errorMessage);
         console.error("Full error:", error);
       }
