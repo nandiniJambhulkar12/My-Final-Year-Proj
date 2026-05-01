@@ -1,0 +1,53 @@
+{
+  "name": "explainable-ai-code-risk-detection",
+  "version": "1.0.0",
+  "description": "Modern dashboard UI for Explainable AI Code Risk Detection and Auditing",
+  "private": true,
+  "dependencies": {
+    "@monaco-editor/react": "^4.6.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "axios": "^1.13.5",
+    "firebase": "^12.3.0",
+    "framer-motion": "^10.16.0",
+    "lucide-react": "^0.292.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.15.0",
+    "react-scripts": "^5.0.1",
+    "recharts": "^2.8.0",
+    "typescript": "^4.9.5",
+    "web-vitals": "^3.3.2"
+  },
+  "devDependencies": {
+    "ajv": "^8.20.0",
+    "autoprefixer": "^10.4.15",
+    "npm-run-all": "^4.1.5",
+    "postcss": "^8.4.29",
+    "tailwindcss": "^3.3.3"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}
