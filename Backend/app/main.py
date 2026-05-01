@@ -5,10 +5,15 @@ from app.db.database import Base, engine, get_db
 from app.core.security import get_current_user
 from sqlalchemy.orm import Session
 import logging
+import os
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Get CORS origins from environment
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS]
 
 # Create all tables on startup
 try:
@@ -22,7 +27,7 @@ app = FastAPI(title="XAI Code Auditor")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
