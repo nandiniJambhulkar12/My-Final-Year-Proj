@@ -1,6 +1,6 @@
 // src/utils/api.ts
 
-const API_URL = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
+const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
 export async function apiFetch(path: string, options: RequestInit = {}) {
   const headers: any = {

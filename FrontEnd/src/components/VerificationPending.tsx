@@ -29,7 +29,7 @@ const VerificationPending: React.FC = () => {
     setChecking(true);
     try {
       const response = await axios.post(
-        `${process.env.REACT_APP_API_URL || "http://127.0.0.1:8000"}/api/auth/verify-status`,
+        `${process.env.REACT_APP_API_URL || "http://localhost:8000"}/api/auth/verify-status`,
         {
           email,
         },

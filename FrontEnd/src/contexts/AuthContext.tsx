@@ -66,7 +66,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       if (firebaseUser) {
         try {
           const apiBase =
-            process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
+            process.env.REACT_APP_API_URL || "http://localhost:8000";
 
           const idToken = await firebaseUser.getIdToken();
 

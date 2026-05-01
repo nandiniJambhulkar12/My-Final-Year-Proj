@@ -32,7 +32,7 @@ const AdminDashboard: React.FC = () => {
     setError(null);
     try {
       const response = await axios.get(
-        `${process.env.REACT_APP_API_URL || "http://127.0.0.1:8000"}/api/admin/users`,
+        `${process.env.REACT_APP_API_URL || "http://localhost:8000"}/api/admin/users`,
         {
           headers: {
             Authorization: `Bearer ${adminToken}`,
@@ -60,7 +60,7 @@ const AdminDashboard: React.FC = () => {
   const handleVerifyUser = async (userId: string, verified: boolean) => {
     try {
       const response = await axios.put(
-        `${process.env.REACT_APP_API_URL || "http://127.0.0.1:8000"}/api/admin/users/${userId}/verify`,
+        `${process.env.REACT_APP_API_URL || "http://localhost:8000"}/api/admin/users/${userId}/verify`,
         null,
         {
           params: { verified },
@@ -82,7 +82,7 @@ const AdminDashboard: React.FC = () => {
   const handleActivateUser = async (userId: string, active: boolean) => {
     try {
       const response = await axios.put(
-        `${process.env.REACT_APP_API_URL || "http://127.0.0.1:8000"}/api/admin/users/${userId}/activate`,
+        `${process.env.REACT_APP_API_URL || "http://localhost:8000"}/api/admin/users/${userId}/activate`,
         null,
         {
           params: { active },
@@ -106,7 +106,7 @@ const AdminDashboard: React.FC = () => {
 
     try {
       const response = await axios.delete(
-        `${process.env.REACT_APP_API_URL || "http://127.0.0.1:8000"}/api/admin/users/${userId}`,
+        `${process.env.REACT_APP_API_URL || "http://localhost:8000"}/api/admin/users/${userId}`,
         {
           headers: {
             Authorization: `Bearer ${adminToken}`,

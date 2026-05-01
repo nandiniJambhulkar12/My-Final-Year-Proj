@@ -265,7 +265,7 @@ const Dashboard: React.FC = () => {
         setDashboardError(null);
 
         const apiBase =
-          process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
+          process.env.REACT_APP_API_URL || "http://localhost:8000";
         await getOrRefreshBackendToken(apiBase, {
           email: userEmail,
           uid: userUid,
@@ -330,7 +330,7 @@ const Dashboard: React.FC = () => {
     setIsAnalyzing(true);
 
     try {
-      const apiBase = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
+      const apiBase = process.env.REACT_APP_API_URL || "http://localhost:8000";
       const token = await getOrRefreshBackendToken(apiBase, user);
 
       let response: Response;

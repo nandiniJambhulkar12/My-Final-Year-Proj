@@ -12,7 +12,6 @@ const Login: React.FC = () => {
     sendPhoneOtp,
     verifyPhoneOtp,
     resetPhoneAuth,
-    user,
   } = useAuth();
   const navigate = useNavigate();
 
@@ -63,7 +62,7 @@ const Login: React.FC = () => {
         // Call backend login to check if user is verified
         try {
           const response = await axios.post(
-            `${process.env.REACT_APP_API_URL || "http://127.0.0.1:8000"}/api/auth/login`,
+            `${process.env.REACT_APP_API_URL || "http://localhost:8000"}/api/auth/login`,
             {
               id_token: idToken,
             },
