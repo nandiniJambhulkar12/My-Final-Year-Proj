@@ -5,6 +5,8 @@ import { ConfirmationResult } from "firebase/auth";
 import axios from "axios";
 import { auth } from "../firebase";
 
+const RESEND_COOLDOWN_SECONDS = 30;
+
 const Login: React.FC = () => {
   const {
     login,
@@ -25,15 +27,44 @@ const Login: React.FC = () => {
   // Phone login state
   const [phoneNumber, setPhoneNumber] = useState("");
   const [countryCode, setCountryCode] = useState("+91");
+  const [consentChecked, setConsentChecked] = useState(false);
   const [otp, setOtp] = useState("");
   const [confirmationResult, setConfirmationResult] =
     useState<ConfirmationResult | null>(null);
   const [otpSent, setOtpSent] = useState(false);
+  const [resendCountdown, setResendCountdown] = useState(0);
 
   // Common state
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const normalizePhoneNumber = (value: string): string => {
+    const trimmed = value.trim();
+    if (trimmed.startsWith("+")) {
+      return `+${trimmed.slice(1).replace(/\D/g, "")}`;
+    }
+    return `${countryCode}${trimmed.replace(/\D/g, "")}`;
+  };
+
+  const loginToBackendWithCurrentUser = async () => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error(
+        "Signed in to Firebase, but no active user session found.",
+      );
+    }
+
+    const idToken = await currentUser.getIdToken();
+    const response = await axios.post(
+      `${process.env.REACT_APP_API_URL || "http://localhost:8000"}/api/auth/login`,
+      {
+        id_token: idToken,
+      },
+    );
+
+    localStorage.setItem("userToken", response.data.access_token);
+  };
 
   // Cleanup reCAPTCHA on unmount
   useEffect(() => {
@@ -42,6 +73,15 @@ const Login: React.FC = () => {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (resendCountdown <= 0) return;
+    const intervalId = window.setInterval(() => {
+      setResendCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [resendCountdown]);
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,29 +128,50 @@ const Login: React.FC = () => {
     }
   };
 
-  const handleSendOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const requestOtp = async () => {
     setError(null);
     setSuccessMessage(null);
 
-    if (!phoneNumber || phoneNumber.length < 10) {
-      setError("Please enter a valid 10-digit phone number");
+    if (!consentChecked) {
+      setError("Please confirm SMS consent before continuing.");
       return;
     }
 
-    const fullPhoneNumber = `${countryCode}${phoneNumber}`;
+    if (!phoneNumber || phoneNumber.replace(/\D/g, "").length < 6) {
+      setError("Please enter a valid phone number.");
+      return;
+    }
+
+    const fullPhoneNumber = normalizePhoneNumber(phoneNumber);
+    if (!/^\+[1-9]\d{5,14}$/.test(fullPhoneNumber)) {
+      setError(
+        "Enter a valid phone number in E.164 format (for example: +919876543210).",
+      );
+      return;
+    }
     setLoading(true);
 
     try {
       const result = await sendPhoneOtp(fullPhoneNumber, "recaptcha-container");
       setConfirmationResult(result);
       setOtpSent(true);
+      setResendCountdown(RESEND_COOLDOWN_SECONDS);
       setSuccessMessage("OTP sent successfully! Check your phone.");
     } catch (err: any) {
       setError(err?.message || "Failed to send OTP. Please try again.");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSendOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await requestOtp();
+  };
+
+  const handleResendOtp = async () => {
+    if (resendCountdown > 0 || loading) return;
+    await requestOtp();
   };
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
@@ -130,9 +191,15 @@ const Login: React.FC = () => {
     setLoading(true);
     try {
       await verifyPhoneOtp(confirmationResult, otp);
+      await loginToBackendWithCurrentUser();
+      setSuccessMessage("Login successful! Redirecting...");
       navigate("/dashboard", { replace: true });
     } catch (err: any) {
-      setError(err?.message || "Invalid OTP. Please try again.");
+      const errorMsg =
+        err?.response?.data?.detail ||
+        err?.message ||
+        "Invalid OTP. Please try again.";
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -157,6 +224,8 @@ const Login: React.FC = () => {
     setOtp("");
     setSuccessMessage(null);
     setError(null);
+    setConsentChecked(false);
+    setResendCountdown(0);
     resetPhoneAuth();
   };
 
@@ -277,14 +346,23 @@ const Login: React.FC = () => {
                       type="tel"
                       className="input-field flex-1"
                       value={phoneNumber}
-                      onChange={(e) =>
-                        setPhoneNumber(e.target.value.replace(/\D/g, ""))
-                      }
-                      placeholder="Enter phone number"
-                      maxLength={10}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      placeholder="Enter number (e.g. 9876543210 or +919876543210)"
                     />
                   </div>
                 </div>
+                <label className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-300">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={consentChecked}
+                    onChange={(e) => setConsentChecked(e.target.checked)}
+                  />
+                  <span>
+                    I agree to receive an SMS verification code. Standard SMS
+                    rates may apply.
+                  </span>
+                </label>
                 <button
                   type="submit"
                   className="btn-primary w-full"
@@ -324,6 +402,16 @@ const Login: React.FC = () => {
                   onClick={resetPhoneState}
                 >
                   Change phone number
+                </button>
+                <button
+                  type="button"
+                  className="text-sm text-primary-600 hover:underline w-full text-center disabled:text-gray-400 disabled:no-underline"
+                  onClick={handleResendOtp}
+                  disabled={loading || resendCountdown > 0}
+                >
+                  {resendCountdown > 0
+                    ? `Resend OTP in ${resendCountdown}s`
+                    : "Resend OTP"}
                 </button>
               </form>
             )}

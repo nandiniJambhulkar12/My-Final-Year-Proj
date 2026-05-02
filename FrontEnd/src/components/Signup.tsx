@@ -4,6 +4,9 @@ import { useAuth } from "../contexts/AuthContext";
 import { validatePassword, passwordStrengthLabel } from "../utils/password";
 import { ConfirmationResult } from "firebase/auth";
 import axios from "axios";
+import { auth } from "../firebase";
+
+const RESEND_COOLDOWN_SECONDS = 30;
 
 const Signup: React.FC = () => {
   const {
@@ -12,7 +15,6 @@ const Signup: React.FC = () => {
     sendPhoneOtp,
     verifyPhoneOtp,
     resetPhoneAuth,
-    user,
   } = useAuth();
   const navigate = useNavigate();
 
@@ -33,15 +35,80 @@ const Signup: React.FC = () => {
   // Phone signup state
   const [phoneNumber, setPhoneNumber] = useState("");
   const [countryCode, setCountryCode] = useState("+91");
+  const [consentChecked, setConsentChecked] = useState(false);
   const [otp, setOtp] = useState("");
   const [confirmationResult, setConfirmationResult] =
     useState<ConfirmationResult | null>(null);
   const [otpSent, setOtpSent] = useState(false);
+  const [resendCountdown, setResendCountdown] = useState(0);
 
   // Common state
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const normalizePhoneNumber = (value: string): string => {
+    const trimmed = value.trim();
+    if (trimmed.startsWith("+")) {
+      return `+${trimmed.slice(1).replace(/\D/g, "")}`;
+    }
+    return `${countryCode}${trimmed.replace(/\D/g, "")}`;
+  };
+
+  const validatePhoneForOtp = (rawPhone: string): string | null => {
+    if (!consentChecked) {
+      return "Please confirm SMS consent before continuing.";
+    }
+
+    if (!rawPhone || rawPhone.replace(/\D/g, "").length < 6) {
+      return "Please enter a valid phone number.";
+    }
+
+    const normalized = normalizePhoneNumber(rawPhone);
+    if (!/^\+[1-9]\d{5,14}$/.test(normalized)) {
+      return "Enter a valid phone number in E.164 format (for example: +919876543210).";
+    }
+
+    return null;
+  };
+
+  const loginToBackendWithCurrentUser = async (): Promise<void> => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error(
+        "Signed in to Firebase, but no active user session found.",
+      );
+    }
+
+    const idToken = await currentUser.getIdToken();
+    const response = await axios.post(
+      `${process.env.REACT_APP_API_URL || "http://localhost:8000"}/api/auth/login`,
+      {
+        id_token: idToken,
+      },
+    );
+
+    localStorage.setItem("userToken", response.data.access_token);
+  };
+
+  const registerPhoneUserInBackend = async (
+    fullPhoneNumber: string,
+  ): Promise<void> => {
+    const currentUser = auth.currentUser;
+    const registrationEmail =
+      currentUser?.email ||
+      `${fullPhoneNumber.replace(/[^\d+]/g, "")}@phone.auth`;
+    const registrationName =
+      currentUser?.displayName || currentUser?.phoneNumber || fullPhoneNumber;
+
+    await axios.post(
+      `${process.env.REACT_APP_API_URL || "http://localhost:8000"}/api/auth/register`,
+      {
+        email: registrationEmail,
+        name: registrationName,
+      },
+    );
+  };
 
   // Cleanup reCAPTCHA on unmount
   useEffect(() => {
@@ -50,6 +117,15 @@ const Signup: React.FC = () => {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (resendCountdown <= 0) return;
+    const intervalId = window.setInterval(() => {
+      setResendCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [resendCountdown]);
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -104,29 +180,40 @@ const Signup: React.FC = () => {
     setPwStrength(passwordStrengthLabel(v));
   };
 
-  const handleSendOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const requestOtp = async () => {
     setError(null);
     setSuccessMessage(null);
 
-    if (!phoneNumber || phoneNumber.length < 10) {
-      setError("Please enter a valid 10-digit phone number");
+    const phoneValidationError = validatePhoneForOtp(phoneNumber);
+    if (phoneValidationError) {
+      setError(phoneValidationError);
       return;
     }
 
-    const fullPhoneNumber = `${countryCode}${phoneNumber}`;
+    const fullPhoneNumber = normalizePhoneNumber(phoneNumber);
     setLoading(true);
 
     try {
       const result = await sendPhoneOtp(fullPhoneNumber, "recaptcha-container");
       setConfirmationResult(result);
       setOtpSent(true);
+      setResendCountdown(RESEND_COOLDOWN_SECONDS);
       setSuccessMessage("OTP sent successfully! Check your phone.");
     } catch (err: any) {
       setError(err?.message || "Failed to send OTP. Please try again.");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSendOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await requestOtp();
+  };
+
+  const handleResendOtp = async () => {
+    if (resendCountdown > 0 || loading) return;
+    await requestOtp();
   };
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
@@ -146,32 +233,32 @@ const Signup: React.FC = () => {
     setLoading(true);
     try {
       await verifyPhoneOtp(confirmationResult, otp);
+      await loginToBackendWithCurrentUser();
 
-      // Wait a moment for auth state to update
-      setTimeout(async () => {
-        // Register user with backend
-        try {
-          await axios.post(
-            `${process.env.REACT_APP_API_URL || "http://localhost:8000"}/api/auth/register`,
-            {
-              email: user?.email || `${countryCode}${phoneNumber}@phone.auth`,
-              name: user?.displayName || `${countryCode}${phoneNumber}`,
-            },
-          );
-        } catch (err) {
-          console.error("Backend registration error:", err);
+      const fullPhoneNumber = normalizePhoneNumber(phoneNumber);
+      try {
+        await registerPhoneUserInBackend(fullPhoneNumber);
+      } catch (backendRegisterErr: any) {
+        const backendMessage = backendRegisterErr?.response?.data?.detail;
+        if (backendMessage) {
+          throw new Error(backendMessage);
         }
+        throw backendRegisterErr;
+      }
 
-        setSuccessMessage("Account created! Waiting for admin verification...");
-        setTimeout(() => {
-          navigate("/verification-pending", {
-            replace: true,
-            state: { email: user?.email },
-          });
-        }, 2000);
-      }, 500);
+      setSuccessMessage("Account created! Waiting for admin verification...");
+      setTimeout(() => {
+        navigate("/verification-pending", {
+          replace: true,
+          state: { email: auth.currentUser?.email || undefined },
+        });
+      }, 1500);
     } catch (err: any) {
-      setError(err?.message || "Invalid OTP. Please try again.");
+      const errorMsg =
+        err?.response?.data?.detail ||
+        err?.message ||
+        "Invalid OTP. Please try again.";
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -202,6 +289,8 @@ const Signup: React.FC = () => {
     setOtp("");
     setSuccessMessage(null);
     setError(null);
+    setResendCountdown(0);
+    setConsentChecked(false);
     resetPhoneAuth();
   };
 
@@ -362,14 +451,23 @@ const Signup: React.FC = () => {
                       type="tel"
                       className="input-field flex-1"
                       value={phoneNumber}
-                      onChange={(e) =>
-                        setPhoneNumber(e.target.value.replace(/\D/g, ""))
-                      }
-                      placeholder="Enter phone number"
-                      maxLength={10}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      placeholder="Enter number (e.g. 9876543210 or +919876543210)"
                     />
                   </div>
                 </div>
+                <label className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-300">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={consentChecked}
+                    onChange={(e) => setConsentChecked(e.target.checked)}
+                  />
+                  <span>
+                    I agree to receive an SMS verification code. Standard SMS
+                    rates may apply.
+                  </span>
+                </label>
                 <button
                   type="submit"
                   className="btn-primary w-full"
@@ -409,6 +507,16 @@ const Signup: React.FC = () => {
                   onClick={resetPhoneState}
                 >
                   Change phone number
+                </button>
+                <button
+                  type="button"
+                  className="text-sm text-primary-600 hover:underline w-full text-center disabled:text-gray-400 disabled:no-underline"
+                  onClick={handleResendOtp}
+                  disabled={loading || resendCountdown > 0}
+                >
+                  {resendCountdown > 0
+                    ? `Resend OTP in ${resendCountdown}s`
+                    : "Resend OTP"}
                 </button>
               </form>
             )}

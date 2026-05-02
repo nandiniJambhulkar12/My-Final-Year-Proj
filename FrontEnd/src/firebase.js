@@ -61,6 +61,7 @@ try {
 
 // Initialize Firebase services
 export const auth = getAuth(app);
+auth.useDeviceLanguage();
 // Persist auth in browser local storage; handle failure gracefully
 setPersistence(auth, browserLocalPersistence).catch(() => {
   // ignore persistence errors (e.g., in non-browser envs)
@@ -85,6 +86,8 @@ export const emailProvider = new EmailAuthProvider();
 // Setup invisible reCAPTCHA for phone auth
 // This function creates a new RecaptchaVerifier each time to avoid stale state
 export const setupRecaptcha = (containerId = "recaptcha-container") => {
+  if (typeof window === "undefined") return null;
+
   // Clear any existing verifier to prevent issues
   if (window.recaptchaVerifier) {
     try {
@@ -96,9 +99,10 @@ export const setupRecaptcha = (containerId = "recaptcha-container") => {
     window.recaptchaVerifier = null;
   }
 
-  // Create new RecaptchaVerifier (containerId, params, auth)
+  // Create new RecaptchaVerifier using modular API signature.
   try {
     window.recaptchaVerifier = new RecaptchaVerifier(
+      auth,
       containerId,
       {
         size: "invisible",
