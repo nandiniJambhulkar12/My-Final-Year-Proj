@@ -1,5 +1,7 @@
 from contextlib import asynccontextmanager
 from time import perf_counter
+import os
+import json
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -23,9 +25,28 @@ configure_logging(settings.log_level)
 logger = get_logger(__name__)
 
 
+def initialize_firebase_from_env():
+    """Initialize Firebase from environment variable if file doesn't exist."""
+    firebase_json_env = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
+    firebase_path = settings.firebase_service_account_path
+    
+    # If environment variable exists and file doesn't exist, create it
+    if firebase_json_env and not os.path.exists(firebase_path):
+        try:
+            with open(firebase_path, "w") as f:
+                f.write(firebase_json_env)
+            logger.info(f"Created Firebase service account file from environment variable: {firebase_path}")
+        except Exception as e:
+            logger.error(f"Failed to create Firebase service account file: {e}")
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     settings = get_settings()
+    
+    # Initialize Firebase from environment if needed
+    initialize_firebase_from_env()
+    
     if settings.firebase_service_account_path:
         try:
             cred = credentials.Certificate(settings.firebase_service_account_path)
